@@ -29,6 +29,24 @@
 #include <stack>
 #include <utf8.h>
 
+template <typename T>
+static void put_or_append(
+  std::vector<T>& v, std::vector<T>::size_type i, const std::vector<T>::value_type& x,
+  const std::vector<T>::value_type& pad = T{})
+{
+  std::vector<T>::size_type n = v.size ();
+  
+  if (i < n)
+    v[i] = x;
+  else {
+    while (i > n) {
+      v.push_back (pad);
+      n++;
+    }
+    v.push_back (x);
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Initially assume no text, but infinite virtual space.
 //
@@ -78,6 +96,101 @@ void Composite::add (
 // highest numbered layer. Emit color codes only on edge detection.
 //
 std::string Composite::str () const
+{
+  // The strings are broken into a vector of int, for UTF8 support.
+  std::vector <int> characters;
+  std::vector <int> layer_numbers;
+  for (unsigned int layer = 0; layer < _layers.size (); ++layer)
+  {
+    const auto& text = std::get <0> (_layers[layer]);
+    auto offset = std::get <1> (_layers[layer]);
+    auto len = utf8_text_length (text);
+
+    // Make sure the vectors are large enough to support push_back() without reallocation.
+    if (characters.capacity () < offset + len)
+    {
+      characters.reserve (offset + len);
+      layer_numbers.reserve (offset + len);
+    }
+
+    // Copy in the layer characters and layer numbers.
+    std::string::size_type cursor = 0;
+    int character;
+    int count = 0;
+    while ((character = utf8_next_char (text, cursor)))
+    {
+      int ch_width = mk_wcwidth ((wchar_t)character);
+
+      switch (ch_width) {
+      case 0:  // zero-width / non-graphic character
+        break;  // Skip this character.
+      case 1:  // ordinary narrow character
+        put_or_append (characters, offset + count, character, ' ');
+        put_or_append (layer_numbers, offset + count, layer + 1);
+        break;
+      case 2:  // graphically wide character
+        put_or_append (characters, offset + count, character, ' ');
+        put_or_append (layer_numbers, offset + count, layer + 1);
+        // NOTE: Add a padding space to the next column. If the final output string includes
+        // the wide character inserted in the current column, then that character will cover
+        // the next column, too.
+        put_or_append (characters, offset + count + 1, ' ');
+        put_or_append (layer_numbers, offset + count + 1, layer + 1);
+        break;
+      default:  // Should not happen.
+        // ISSUE: Report character width error?
+        return std::string();  // Fail.
+      }
+
+      count += ch_width;
+    }
+  }
+
+  // Now walk the character and layer vectors, emitting every character and
+  // every detected layer change.
+  std::stringstream out;
+  int prev_layer = 0;
+  for (unsigned int i = 0; i < characters.size (); ++i)
+  {
+    int curr_layer = layer_numbers[i];
+    int character = characters[i];
+
+    // A change in layer triggers a code emit.
+    if (prev_layer != curr_layer)
+    {
+      if (prev_layer)
+        out << std::get <2> (_layers[prev_layer - 1]).end ();
+
+      if (curr_layer)
+        out << std::get <2> (_layers[curr_layer - 1]).code ();
+
+      prev_layer = curr_layer;
+    }
+
+    // IDEA: Cache the character width to avoid calling mk_wcwidth again.
+    if (mk_wcwidth ((wchar_t)character) == 2) {  // graphically wide character
+      if (i+1 >= characters.size ())
+        character = ' ';  // End of composite, no room for wide character.
+      else {
+        int next_layer = layer_numbers[i+1];
+        if (curr_layer != next_layer)
+          character = ' ';  // Layer change at next column, no room for wide character.
+        else
+          ++i;  // Wide character will be emitted, skip next column.
+      }
+    }
+
+    out << utf8_character (character);
+  }
+
+  // Terminate the color codes, if necessary.
+  if (prev_layer)
+    out << std::get <2> (_layers[prev_layer - 1]).end ();
+
+  return out.str ();
+}
+
+/*std::string Composite::str () const
 {
   // The strings are broken into a vector of int, for UTF8 support.
   std::vector <int> characters;
@@ -135,7 +248,7 @@ std::string Composite::str () const
     out << std::get <2> (_layers[prev_color - 1]).end ();
 
   return out.str ();
-}
+}*/
 
 ////////////////////////////////////////////////////////////////////////////////
 // So the same instance can be reused.
