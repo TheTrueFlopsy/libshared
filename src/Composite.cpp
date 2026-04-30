@@ -31,15 +31,19 @@
 
 template <typename T>
 static void put_or_append(
-  std::vector<T>& v, std::vector<T>::size_type i, const std::vector<T>::value_type& x,
-  const std::vector<T>::value_type& pad = T{})
+  std::vector<T>& v,
+  typename std::vector<T>::size_type i,
+  const typename std::vector<T>::value_type& x,
+  const typename std::vector<T>::value_type& pad = T{})
 {
-  std::vector<T>::size_type n = v.size ();
-  
+  typename std::vector<T>::size_type n = v.size ();
+
   if (i < n)
     v[i] = x;
-  else {
-    while (i > n) {
+  else
+  {
+    while (i > n)
+    {
       v.push_back (pad);
       n++;
     }
@@ -121,7 +125,8 @@ std::string Composite::str () const
     {
       int ch_width = mk_wcwidth ((wchar_t)character);
 
-      switch (ch_width) {
+      switch (ch_width)
+      {
       case 0:  // zero-width / non-graphic character
         break;  // Skip this character.
       case 1:  // ordinary narrow character
@@ -139,7 +144,7 @@ std::string Composite::str () const
         break;
       default:  // Should not happen.
         // ISSUE: Report character width error?
-        return std::string();  // Fail.
+        return std::string ();  // Fail.
       }
 
       count += ch_width;
@@ -168,10 +173,12 @@ std::string Composite::str () const
     }
 
     // IDEA: Cache the character width to avoid calling mk_wcwidth again.
-    if (mk_wcwidth ((wchar_t)character) == 2) {  // graphically wide character
+    if (mk_wcwidth ((wchar_t)character) == 2)  // graphically wide character
+    {
       if (i+1 >= characters.size ())
         character = ' ';  // End of composite, no room for wide character.
-      else {
+      else
+      {
         int next_layer = layer_numbers[i+1];
         if (curr_layer != next_layer)
           character = ' ';  // Layer change at next column, no room for wide character.
