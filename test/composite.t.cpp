@@ -30,7 +30,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 int main (int, char**)
 {
-  UnitTest t (3);
+  UnitTest t (4);
 
   Composite c1;
   c1.add ("left",  2, Color ());
@@ -144,18 +144,31 @@ int main (int, char**)
   //     (but still be covered by the current layer).
   Composite c9;
   c9.add ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0, Color ());  // BG
-  c9.add ("😃😃😃", 1, Color());  // some wide chars
-  c9.add ("bb", 1, Color());  // obscure the first of the two wide chars
-  c9.add ("😖😖😖", 8, Color());  // a few more wide chars
-  c9.add ("cc", 9, Color());  // obscure half of each of the first two
-  c9.add ("😬😬😬", 15, Color());  // even more
-  c9.add ("会会会", 18, Color());  // obscure the last one-and-half
-  c9.add ("[d­d][d́d][d​d]", 25, Color());  // layer with zero-width chars
-  c9.add ("}{", 32, Color());  // obscure two of the non-zero-width chars
-  c9.add ("ee⁢⁢🐋🐋", 38, Color());  // 1-col, 0-col and 2-col chars on same layer
+  c9.add ("😃😃😃", 1, Color ());  // some wide chars
+  c9.add ("bb", 1, Color ());  // obscure the first of the two wide chars
+  c9.add ("😖😖😖", 8, Color ());  // a few more wide chars
+  c9.add ("cc", 9, Color ());  // obscure half of each of the first two
+  c9.add ("😬😬😬", 15, Color ());  // even more
+  c9.add ("会会会", 18, Color ());  // obscure the last one-and-half
+  c9.add ("[d­d][d́d][d​d]", 25, Color ());  // layer with zero-width chars
+  c9.add ("}{", 32, Color ());  // obscure two of the non-zero-width chars
+  c9.add ("ee⁢⁢🐋🐋", 38, Color ());  // 1-col, 0-col and 2-col chars on same layer
   t.is (c9.str (), "abb😃😃a cc 😖a😬 会会会a[dd][dd}{dd]aee🐋🐋aaaaaaa", "Composite ... --> 'abb😃😃a cc 😖a😬 会会会a[dd][dd}{dd]aee🐋🐋aaaaaaa'");
 
-  // TODO: Add colored layers containing characters with non-standard Unicode width.
+  // Add colored layers containing characters with non-standard Unicode width.
+  // Display the result.
+  Composite c10;
+  c10.add ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0, Color ("black on bright blue"));  // BG
+  c10.add ("😃😃😃", 1, Color ("yellow on grey10"));  // some wide chars
+  c10.add ("bb", 1, Color ("red on black"));  // obscure the first of the two wide chars
+  c10.add ("😖😖😖", 8, Color ("green on blue"));  // a few more wide chars
+  c10.add ("cc", 9, Color ("grey18 on green"));  // obscure half of each of the first two
+  c10.add ("😬😬😬", 15, Color ("white on red"));  // even more
+  c10.add ("会会会", 18, Color ("magenta on grey6"));  // obscure the last one-and-half
+  c10.add ("[d­d][d́d][d​d]", 25, Color ("blue on white"));  // layer with zero-width chars
+  c10.add ("}{", 32, Color ("red on white"));  // obscure two of the non-zero-width chars
+  c10.add ("ee⁢⁢🐋🐋", 38, Color ("yellow on cyan"));  // 1-col, 0-col and 2-col chars on same layer
+  t.diag (c10.str ());
 
   return 0;
 }
