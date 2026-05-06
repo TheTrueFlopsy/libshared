@@ -161,12 +161,6 @@ void Composite::add (
 // Walk all strings left to right, selecting the character and color from the
 // highest numbered layer. Emit color codes only on edge detection.
 //
-
-// IDEA: Resurrect the concept where each column's character sequence is fetched directly
-// from the UTF-8 layer strings. Record the bounds of the string slices in terms of UTF-8
-// bytes. Make use of state associated with the layer currently being applied (e.g. byte
-// offset in layer string, width of previous character) to simplify the algorithm.
-
 std::string Composite::str () const
 {
   std::vector <ColumnData> columns;
@@ -258,7 +252,10 @@ std::string Composite::str () const
       prev_layer = curr_layer;
     }
 
-    out << std::string (text, column_data.text_begin_i, column_data.char_count ());
+    if (column_data.is_padding ())
+      out << ' ';
+    else
+      out << std::string (text, column_data.text_begin_i, column_data.char_count ());
 
     if (column_data.char_0_width == 2)
       ++column_i;
