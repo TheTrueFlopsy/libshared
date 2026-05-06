@@ -55,6 +55,7 @@ namespace {
 
   struct ColumnData
   {
+    // NOTE: Layer numbers start at 1. "Layer 0" is background not covered by any layer.
     unsigned int layer_num;
 
     std::string::size_type text_begin_i;
@@ -76,7 +77,7 @@ namespace {
 
     std::string::difference_type char_count () const
     {
-      return text_end_i - text_start_i;
+      return text_end_i - text_begin_i;
     }
 
     void make_padding ()
@@ -92,7 +93,7 @@ namespace {
     }
   };
 
-  const ColumnData LAYER_0_PAD ();
+  const ColumnData LAYER_0_PAD;
 
   const std::string::size_type INVALID_COLUMN_I = std::numeric_limits<std::string::size_type>::max ();
 
@@ -158,14 +159,13 @@ void Composite::add (
 //         bbbbb           // Layer 2
 //                   c     // Layer 3
 //
-// Walk all strings left to right, selecting the character and color from the
+// Walk all layers left to right, selecting the character and color from the
 // highest numbered layer. Emit color codes only on edge detection.
 //
 std::string Composite::str () const
 {
   std::vector <ColumnData> columns;
 
-  // Determine the content of each column in the composited string. Apply layers in sequence.
   for (unsigned int layer_i = 0; layer_i < _layers.size (); ++layer_i)
   {
     const auto& text = std::get <0> (_layers[layer_i]);
@@ -190,7 +190,7 @@ std::string Composite::str () const
 
       switch (ch_width)
       {
-      case 0:  // zero-width / non-graphic character
+      case 0:  // zero-width / nonspacing character
         if (prev_spacer_column_i == INVALID_COLUMN_I)  // No preceding spacing character on this layer.
           ;  // Skip this character.
         else  // There is a preceding spacing character on this layer.
@@ -199,7 +199,7 @@ std::string Composite::str () const
           columns[prev_spacer_column_i].text_end_i = cursor;
         }
         break;
-      case 1:  // ordinary narrow character
+      case 1:  // ordinary narrow spacing character
         if (prev_spacer_column_i == INVALID_COLUMN_I)
           do_halfcovered_wide_char_check (columns, column_i);
 
@@ -209,7 +209,7 @@ std::string Composite::str () const
         prev_spacer_column_i = column_i;
         column_count += 1;
         break;
-      case 2:  // graphically wide character
+      case 2:  // graphically wide spacing character
         if (prev_spacer_column_i == INVALID_COLUMN_I)
           do_halfcovered_wide_char_check (columns, column_i);
 
@@ -236,7 +236,7 @@ std::string Composite::str () const
   unsigned int prev_layer = 0;
   for (unsigned int column_i = 0; column_i < columns.size (); ++column_i)
   {
-    auto column_data = columns[i];
+    auto column_data = columns[column_i];
     auto curr_layer = column_data.layer_num;
     const auto& text = std::get <0> (_layers[curr_layer-1]);
 
@@ -267,106 +267,6 @@ std::string Composite::str () const
 
   return out.str ();
 }
-
-/*std::string Composite::str () const
-{
-  // The strings are broken into a vector of unsigned int, for UTF-8 support.
-  std::vector <unsigned int> characters;
-  std::vector <unsigned int> layer_numbers;
-  for (unsigned int layer = 0; layer < _layers.size (); ++layer)
-  {
-    const auto& text = std::get <0> (_layers[layer]);
-    auto offset = std::get <1> (_layers[layer]);
-    auto len = utf8_text_length (text);
-
-    // Make sure the vectors are large enough to support push_back() without reallocation.
-    if (characters.capacity () < offset + len)
-    {
-      characters.reserve (offset + len);
-      layer_numbers.reserve (offset + len);
-    }
-
-    // Copy in the layer characters and layer numbers.
-    std::string::size_type cursor = 0;
-    unsigned int character;
-    unsigned int count = 0;
-    while ((character = utf8_next_char (text, cursor)))
-    {
-      std::string::size_type ch_column = offset + count;
-      int ch_width = mk_wcwidth ((wchar_t)character);
-
-      switch (ch_width)
-      {
-      case 0:  // zero-width / non-graphic character
-        break;  // Skip this character.
-      case 1:  // ordinary narrow character
-        put_or_extend (characters, ch_column, character, (unsigned int)' ');
-        put_or_extend (layer_numbers, ch_column, layer + 1);
-        break;
-      case 2:  // graphically wide character
-        put_or_extend (characters, ch_column, character, (unsigned int)' ');
-        put_or_extend (layer_numbers, ch_column, layer + 1);
-        // NOTE: Put a padding space in the next column. If the final output string includes
-        // the wide character inserted in the current column, then that character will cover
-        // the next column, too.
-        put_or_extend (characters, ch_column + 1, (unsigned int)' ');
-        put_or_extend (layer_numbers, ch_column + 1, layer + 1);
-        break;
-      default:  // Should not happen.
-        // ISSUE: Report character width error?
-        return std::string ();  // Fail.
-      }
-
-      count += (unsigned int)ch_width;  // If we get here, ch_width is in { 0, 1, 2 }.
-    }
-  }
-
-  // Now walk the character and layer vectors, emitting every character and
-  // every detected layer change.
-  std::stringstream out;
-  unsigned int prev_layer = 0;
-  for (unsigned int i = 0; i < characters.size (); ++i)
-  {
-    unsigned int curr_layer = layer_numbers[i];
-    unsigned int character = characters[i];
-
-    // A change in layer triggers a code emit.
-    if (prev_layer != curr_layer)
-    {
-      // IDEA: Suppress code emission if prev_layer and curr_layer have equivalent Colors.
-      if (prev_layer)
-        out << std::get <2> (_layers[prev_layer - 1]).end ();
-
-      if (curr_layer)
-        out << std::get <2> (_layers[curr_layer - 1]).code ();
-
-      prev_layer = curr_layer;
-    }
-
-    // IDEA: Cache the character width to avoid calling mk_wcwidth again.
-    if (mk_wcwidth ((wchar_t)character) == 2)  // graphically wide character
-    {
-      if (i+1 >= characters.size ())  // Won't happen if every wide char is followed by a padding space.
-        character = ' ';  // End of composite, no room for wide character.
-      else
-      {
-        unsigned int next_layer = layer_numbers[i+1];
-        if (curr_layer != next_layer)
-          character = ' ';  // Layer change at next column, no room for wide character.
-        else
-          ++i;  // Wide character will be emitted, skip next column.
-      }
-    }
-
-    out << utf8_character (character);
-  }
-
-  // Terminate the color codes, if necessary.
-  if (prev_layer)
-    out << std::get <2> (_layers[prev_layer - 1]).end ();
-
-  return out.str ();
-}*/
 
 ////////////////////////////////////////////////////////////////////////////////
 // So the same instance can be reused.
