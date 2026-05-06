@@ -150,10 +150,10 @@ int main (int, char**)
   c9.add ("cc", 9, Color ());  // obscure half of each of the first two
   c9.add ("😬😬😬", 15, Color ());  // even more
   c9.add ("会会会", 18, Color ());  // obscure the last one-and-half
-  c9.add ("[d­d][d́d][d​d]", 25, Color ());  // layer with zero-width chars
+  c9.add ("[èé][ñn̄][öô]", 25, Color ());  // layer with zero-width chars
   c9.add ("}{", 32, Color ());  // obscure two of the non-zero-width chars
-  c9.add ("ee⁢⁢🐋🐋", 38, Color ());  // 1-col, 0-col and 2-col chars on same layer
-  t.is (c9.str (), "abb😃😃a cc 😖a😬 会会会a[dd][dd}{dd]aee🐋🐋aaaaaaa", "Composite ... --> 'abb😃😃a cc 😖a😬 会会会a[dd][dd}{dd]aee🐋🐋aaaaaaa'");
+  c9.add ("è🐋é🐋", 38, Color ());  // 1-col, 0-col and 2-col chars on same layer
+  t.is (c9.str (), "abb😃😃a cc 😖a😬 会会会a[èé][ñn̄}{öô]aè🐋é🐋aaaaaaa", "Composite ... --> 'abb😃😃a cc 😖a😬 会会会a[èé][ñn̄}{öô]aè🐋é🐋aaaaaaa'");
 
   // Add colored layers containing characters with non-standard Unicode width.
   // Display the result.
@@ -165,13 +165,12 @@ int main (int, char**)
   c10.add ("cc", 9, Color ("grey18 on green"));  // obscure half of each of the first two
   c10.add ("😬😬😬", 15, Color ("white on red"));  // even more
   c10.add ("会会会", 18, Color ("magenta on grey6"));  // obscure the last one-and-half
-  c10.add ("[d­d][d́d][d​d]", 25, Color ("blue on white"));  // layer with zero-width chars
+  c10.add ("[èé][ñn̄][öô]", 25, Color ("blue on white"));  // layer with zero-width chars
   c10.add ("}{", 32, Color ("red on white"));  // obscure two of the non-zero-width chars
-  c10.add ("ee⁢⁢🐋🐋", 38, Color ("yellow on cyan"));  // 1-col, 0-col and 2-col chars on same layer
+  c10.add ("è🐋é🐋", 38, Color ("yellow on cyan"));  // 1-col, 0-col and 2-col chars on same layer
   t.diag (c10.str ());
 
   return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
