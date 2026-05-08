@@ -144,7 +144,8 @@ int main (int, char**)
   //     The unobscured column should be treated as containing blank space
   //     (but still be covered by the current layer).
   Composite c9;
-  c9.add ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0, Color ());  // BG
+  c9.add ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0, Color ());  // BG
+  c9.add ("a", 50, Color ());  // more BG
   c9.add ("😃😃😃", 1, Color ());  // some wide chars
   c9.add ("bb", 1, Color ());  // obscure the first of the two wide chars
   c9.add ("😖😖😖", 8, Color ());  // a few more wide chars
@@ -155,12 +156,13 @@ int main (int, char**)
   c9.add ("}{", 32, Color ());  // obscure two of the non-zero-width chars
   c9.add ("è🐋é🐋", 38, Color ());  // 1-col, 0-col and 2-col chars on same layer
   c9.add ("\a\aff", 45, Color ());  // zero-width characters at beginning of layer
-  t.is (c9.str (), "abb😃😃a cc 😖a😬 会会会a[èé][ñn̄}{öô]aè🐋é🐋affaaaa", "Composite ... --> 'abb😃😃a cc 😖a😬 会会会a[èé][ñn̄}{öô]aè🐋é🐋affaaaa'");
+  t.is (c9.str (), "abb😃😃a cc 😖a😬 会会会a[èé][ñn̄}{öô]aè🐋é🐋affa  a", "Composite ... --> 'abb😃😃a cc 😖a😬 会会会a[èé][ñn̄}{öô]aè🐋é🐋affa  a'");
 
   // Add colored layers containing characters with non-standard Unicode width.
   // Display the result.
   Composite c10;
-  c10.add ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0, Color ("black on bright blue"));  // BG
+  c10.add ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0, Color ("black on bright blue"));  // BG
+  c10.add ("a", 50, Color ("black on bright blue"));  // more BG
   c10.add ("😃😃😃", 1, Color ("yellow on grey10"));  // some wide chars
   c10.add ("bb", 1, Color ("red on black"));  // obscure the first of the two wide chars
   c10.add ("😖😖😖", 8, Color ("green on blue"));  // a few more wide chars

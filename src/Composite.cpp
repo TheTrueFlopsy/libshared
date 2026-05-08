@@ -27,13 +27,14 @@
 #include <Composite.h>
 #include <limits>
 #include <sstream>
-#include <stack>
+//#include <stack>
 #include <utf8.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////
 
-namespace {
+namespace
+{
 
   // Helper function that either replaces a pre-existing element at index (i) in
   // a std::vector with the value (x) (if (i) is less than the size of the vector)
@@ -42,7 +43,7 @@ namespace {
   // that of the final pre-existing element of the vector and (i).
   template <typename T>
   void put_or_extend (
-    std::vector<T>& v, typename std::vector<T>::size_type i, const T& x, const T& pad = T{})
+    std::vector<T>& v, typename std::vector<T>::size_type i, const T& x, const T& pad = T {})
   {
     if (i < v.size ())
       v[i] = x;
@@ -53,33 +54,46 @@ namespace {
     }
   }
 
+  // Helper class that is used to store information about columns in a Composite.
   struct ColumnData
   {
+    // Number of topmost layer that overlaps with the column represented by this ColumnData.
     // NOTE: Layer numbers start at 1. "Layer 0" is background not covered by any layer.
     unsigned int layer_num;
 
+    // Byte offset into the UTF-8 text string of the layer identified by (layer_num).
+    // Points to the first byte of the first character to include in the content
+    // of the column represented by this ColumnData.
     std::string::size_type text_begin_i;
 
+    // Byte offset into the UTF-8 text string of the layer identified by (layer_num).
+    // Points to the first byte after the last character to include in the content
+    // of the column represented by this ColumnData.
     std::string::size_type text_end_i;
 
+    // Unicode display width of the first character to include in the content
+    // of the column represented by this ColumnData. Should always be 1 or 2,
+    // unless this ColumnData represents a padding column.
     unsigned char char_0_width;
 
     ColumnData (
-      unsigned int layer=0, std::string::size_type begin_i=1, std::string::size_type end_i=0,
-      unsigned char c_0_w=0)
+      unsigned int layer = 0, std::string::size_type begin_i = 1, std::string::size_type end_i = 0,
+      unsigned char c_0_w = 0)
     :
       layer_num (layer), text_begin_i (begin_i), text_end_i (end_i), char_0_width (c_0_w)
     {}
 
     ColumnData (const ColumnData& orig) = default;
 
-    ColumnData &operator= (const ColumnData& orig) = default;
+    ColumnData& operator= (const ColumnData& orig) = default;
 
-    std::string::difference_type char_count () const
+    std::string::difference_type byte_count () const
     {
       return text_end_i - text_begin_i;
     }
 
+    // Changes the state of this ColumnData to one that indicates that the ColumnData
+    // represents a padding column (i.e. a state where byte_count is negative).
     void make_padding ()
     {
       text_begin_i = 1;
@@ -89,14 +103,16 @@ namespace {
 
     bool is_padding () const
     {
-      return char_count () < 0;
+      return byte_count () < 0;
     }
   };
 
-  const ColumnData LAYER_0_PAD;
+  const ColumnData LAYER_0_PAD;  // ColumnData representing a padding column on "layer 0".
 
+  // Special column index value, distinct from any valid column index.
   const std::string::size_type INVALID_COLUMN_I = std::numeric_limits<std::string::size_type>::max ();
 
+  // Helper function that turns the uncovered half of half-covered wide characters into padding.
   inline void do_halfcovered_wide_char_check (
     std::vector<ColumnData>& columns, std::vector<ColumnData>::size_type column_i)
   {
@@ -104,9 +120,9 @@ namespace {
     // that character (and any nonspacing characters associated with it) with padding.
     // (Because the second half of that character will be covered, and we couldn't display
     // half a character if we wanted to.)
-    if (column_i >= 1 && column_i-1 < columns.size ())
+    if (column_i >= 1 && column_i - 1 < columns.size ())
     {
-      ColumnData &prev_col_data = columns[column_i-1];
+      ColumnData& prev_col_data = columns[column_i - 1];
       if (prev_col_data.char_0_width == 2)
         prev_col_data.make_padding ();
     }
@@ -172,12 +188,13 @@ std::string Composite::str () const
     auto offset = std::get <1> (_layers[layer_i]);
     auto len = utf8_text_length (text);
 
-    // Make sure the column vector is large enough to support push_back() without reallocation.
+    // Make sure the capacity of the column vector is large enough to support push_back()
+    // without reallocation.
     if (columns.capacity () < offset + len)
       columns.reserve (offset + len);
 
     // Inspect and decide how to handle each character (i.e. Unicode code point)
-    // in the current layer text.
+    // in the current layer's text string.
     std::string::size_type prev_cursor = 0;
     std::string::size_type cursor = 0;
     unsigned int column_count = 0;
@@ -204,7 +221,7 @@ std::string Composite::str () const
           do_halfcovered_wide_char_check (columns, column_i);
 
         // Put the character in the appropriate column. Pad out the column list as necessary.
-        put_or_extend (columns, column_i, ColumnData (layer_i+1, prev_cursor, cursor, 1), LAYER_0_PAD);
+        put_or_extend (columns, column_i, ColumnData (layer_i + 1, prev_cursor, cursor, 1), LAYER_0_PAD);
 
         prev_spacer_column_i = column_i;
         column_count += 1;
@@ -215,9 +232,9 @@ std::string Composite::str () const
 
         // Put the character in the appropriate column. Pad out the column list as necessary.
         // Make the column after the current one (which is also covered by the wide character)
-        // a pad column on the current layer.
-        put_or_extend (columns, column_i, ColumnData (layer_i+1, prev_cursor, cursor, 2), LAYER_0_PAD);
-        put_or_extend (columns, column_i+1, ColumnData (layer_i+1), LAYER_0_PAD);
+        // a padding column on the current layer.
+        put_or_extend (columns, column_i, ColumnData (layer_i + 1, prev_cursor, cursor, 2), LAYER_0_PAD);
+        put_or_extend (columns, column_i + 1, ColumnData (layer_i + 1), LAYER_0_PAD);
 
         prev_spacer_column_i = column_i;
         column_count += 2;
@@ -227,6 +244,7 @@ std::string Composite::str () const
         return std::string ();  // Fail.
       }
 
+      // Remember byte offset of first UTF-8 byte of next character in the layer text.
       prev_cursor = cursor;
     }
   }
@@ -238,32 +256,34 @@ std::string Composite::str () const
   {
     auto column_data = columns[column_i];
     auto curr_layer = column_data.layer_num;
-    const auto& text = std::get <0> (_layers[curr_layer-1]);
+    const auto& text = std::get <0> (_layers[curr_layer - 1]);
 
-    // A change in layer_i triggers a code emit.
+    // A change in layer triggers an ANSI escape code emit.
     if (prev_layer != curr_layer)
     {
-      if (prev_layer)
-        out << std::get <2> (_layers[prev_layer-1]).end ();
+      if (prev_layer)  // Reset attributes (if any) of previous layer.
+        out << std::get <2> (_layers[prev_layer - 1]).end ();
 
-      if (curr_layer)
-        out << std::get <2> (_layers[curr_layer-1]).code ();
+      if (curr_layer) // Set attributes (if any) of current layer.
+        out << std::get <2> (_layers[curr_layer - 1]).code ();
 
       prev_layer = curr_layer;
     }
 
+    // The layer text string is already UTF-8, so we can output its bytes verbatim,
+    // provided that we're keeping track of character (i.e. code point) boundaries.
     if (column_data.is_padding ())
-      out << ' ';
-    else
-      out << std::string (text, column_data.text_begin_i, column_data.char_count ());
+      out << ' ';  // Display padding columns as spaces.
+    else  // Display a slice of the layer text (Spacer [Nonspacer ...]).
+      out.write(text.data () + column_data.text_begin_i, column_data.byte_count ());
 
     if (column_data.char_0_width == 2)
-      ++column_i;
+      ++column_i;  // Wide characters cover two columns.
   }
 
   // Terminate the color codes, if necessary.
   if (prev_layer)
-    out << std::get <2> (_layers[prev_layer-1]).end ();
+    out << std::get <2> (_layers[prev_layer - 1]).end ();
 
   return out.str ();
 }
