@@ -46,6 +46,206 @@
 #include <windows.h>
 #endif
 
+static const std::string DEFAULT_SURROGATE_STR = ".";
+
+// Replaces a Unicode character in UTF-8 encoding at byte index (i) in the byte string (input)
+// with the byte string (subst). Returns the byte index of the character following the substituted
+// one, after the substitution.
+static unsigned int utf8ReplaceChar (
+  std::string& input, std::string::size_type& i, const std::string& subst)
+{
+  std::string::size_type old_i = i;
+
+  int ch = utf8_next_char (input, i);
+  if (ch == 0)
+    return 0;
+
+  input.replace (old_i, i - old_i, subst);
+  i = old_i + subst.size ();  // byte index of next code point, post-substitution
+
+  return ch;
+}
+
+// Gets the byte indexes of all Unicode characters in the byte string (s), which is assumed
+// to contain a valid UTF-8 string. Stores the byte indexes in the vector (out).
+static void getUtf8CharacterByteIndexes (const std::string& s, std::vector<std::string::size_type>& out)
+{
+  std::string::size_type byte_i = 0;
+
+  while (byte_i < s.size ())
+  {
+    out.push_back (byte_i);
+    utf8_next_char (s, byte_i);
+  }
+}
+
+// Gets the substring of the byte string (s) that starts at index (begin) and ends at index (end).
+static std::string rangeSubstr (const std::string& s, std::string::size_type begin, std::string::size_type end)
+{
+  return s.substr (begin, end - begin);
+}
+
+// Returns true if and only if the byte string (text), which is assumed to contain a valid
+// UTF-8 string, contains a Unicode character with display width greater than (width).
+static bool containsTooWideChars (const std::string& text, int width)
+{
+  std::string::size_type byte_i = 0;
+
+  while (byte_i < text.size ())
+  {
+    int ch = utf8_next_char (text, byte_i);
+
+    if (mk_wcwidth (ch) > width)
+      return true;
+  }
+
+  return false;
+}
+
+// Replaces all Unicode characters with display width greater than (width) in the byte string (text),
+// which is assumed to contain a valid UTF-8 string, with the byte string (surrogate).
+static void replaceTooWideChars (std::string& text, int width, const std::string& surrogate)
+{
+  std::string::size_type byte_i = 0;
+
+  while (byte_i < text.size ())
+  {
+    std::string::size_type old_byte_i = byte_i;
+
+    int ch = utf8_next_char (text, byte_i);
+
+    if (mk_wcwidth (ch) > width)
+    {
+      byte_i = old_byte_i;  // Rewind (byte_i) by one code point.
+      utf8ReplaceChar (text, byte_i, surrogate);
+    }
+  }
+}
+
+static bool extractLine (
+  std::string& line,
+  const std::string& text,
+  const std::vector<std::string::size_type>& ch_byte_indexes,
+  int width,
+  bool hyphenate,
+  unsigned int& ch_index)
+{
+  auto text_len_utf8 = ch_byte_indexes.size ();  // length of (text) in Unicode characters
+
+  if (ch_index >= text_len_utf8)  // Already at end of string, return false.
+    return false;
+
+  // code point index (CPI) of first (non-whitespace) character on current line
+  unsigned int line_start_ch_i = ch_index;
+  unsigned int prev_word_end_ch_i = text_len_utf8;  // CPI of most recently encountered word ending
+  unsigned int prev_ws_start_ch_i = text_len_utf8;  // CPI of start of ongoing run of whitespace
+  // CPI of most recently encountered positive-width character (not including the current one),
+  // relevant for hyphenation
+  unsigned int prev_pos_w_ch_i = text_len_utf8;
+  unsigned int ch_i = line_start_ch_i;  // CPI of current character
+  unsigned int ch = 0;  // Unicode code point of current character
+  int line_width = 0;  // accumulated display width of current line
+
+  while (ch_i < text_len_utf8)
+  {
+    std::string::size_type ch_byte_i = ch_byte_indexes[ch_i];  // byte index of current character
+    std::string::size_type next_ch_byte_i = ch_byte_i;
+    unsigned int prev_ch = ch;  // Unicode code point of previous character
+    ch = utf8_next_char (text, next_ch_byte_i);
+
+    if (ch == '\0' || ch == '\n')  // mandatory line break
+    {
+      // Strip any run of whitespace at end of line.
+      unsigned int line_end_ch_i = (prev_ws_start_ch_i < text_len_utf8) ? prev_ws_start_ch_i : ch_i;
+      line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[line_end_ch_i]);
+      ch_index = ch_i + 1U;  // Do not include the line break character in any line.
+      return true;
+    }
+    else if (ch == ' ')  // whitespace
+    {
+      if (ch_i == line_start_ch_i)  // Ignore whitespace at start of line.
+      {
+        line_start_ch_i++;
+        ch_i++;
+        continue;
+      }
+      else if (prev_ch != ' ')  // Detect word endings.
+      {
+        prev_word_end_ch_i = ch_i;  // word ending
+        prev_ws_start_ch_i = ch_i;  // start of (non-initial) run of whitespace
+      }
+    }
+    else  // not whitespace
+      prev_ws_start_ch_i = text_len_utf8;  // no ongoing run of whitespace
+
+    int ch_width = mk_wcwidth (ch);  // display width of current character
+
+    // NOTE: Characters that are wider than the maximum line width should have been fixed
+    // in preprocessing. The fallback behavior is to pretend that the character fits on
+    // a line by itself, even though it doesn't.
+    if (ch_width > width)  // Character doesn't fit on a line by itself.
+      ch_width = width;
+
+    if (line_width + ch_width <= width)  // Line not full, include current character in line.
+    {
+      if (ch_width > 0)
+        prev_pos_w_ch_i = ch_i;  // positive-width character added to line
+
+      line_width += ch_width;
+      ch_i++;
+      continue;
+    }
+
+    if (prev_word_end_ch_i < text_len_utf8)  // Line full, break at previous word ending.
+    {
+      line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[prev_word_end_ch_i]);
+      ch_index = prev_word_end_ch_i;  // Start next line at previous word ending.
+    }
+    else if (hyphenate)  // Line full, no word ending available, hyphenation enabled.
+    {
+      // NOTE: There might be enough space left for a hyphen even if there's not enough
+      // for the next character.
+      unsigned int hyphen_ch_i = (line_width < width) ? ch_i : prev_pos_w_ch_i;
+      std::string::size_type hyphen_ch_byte_i = ch_byte_indexes[hyphen_ch_i];
+      unsigned int hyphen_ch = utf8_next_char(text, hyphen_ch_byte_i);
+      int hyphen_ch_width = mk_wcwidth(hyphen_ch);
+
+      if (hyphen_ch_i > line_start_ch_i && (hyphen_ch_i == ch_i || line_width - hyphen_ch_width > 0))
+      {
+        // Hyphenated line has positive width, go ahead and hyphenate.
+        line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[hyphen_ch_i]);
+        line.push_back ('-');
+        ch_index = hyphen_ch_i;  // Start next line at character that was dropped to fit the hyphen.
+      }
+      else  // Can't hyphenate here.
+      {
+        line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[ch_i]);
+        ch_index = ch_i;  // Start next line at current character.
+      }
+    }
+    else  // Line full, no word ending available, hyphenation disabled.
+    {
+      line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[ch_i]);
+      ch_index = ch_i;  // Start next line at current character.
+    }
+
+    return true;  // NOTE: If we reach this point, we have filled a line and should return true.
+  }
+
+  ch_index = text_len_utf8;  // Reached end of input string.
+
+  if (line_start_ch_i < text_len_utf8)  // Include the last line, which contains non-whitespace.
+  {
+    // Strip any run of whitespace at end of line.
+    std::string::size_type line_end_byte_i =
+      (prev_ws_start_ch_i < text_len_utf8) ? ch_byte_indexes[prev_ws_start_ch_i] : text.size ();
+    line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], line_end_byte_i);
+    return true;
+  }
+
+  return false;  // Last line contained nothing but whitespace, return false.
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 void wrapText (
   std::vector <std::string>& lines,
@@ -53,9 +253,24 @@ void wrapText (
   const int width,
   bool hyphenate)
 {
+  // Pre-process the input string.
+  const std::string* text_ptr = &text;
+  std::string text_fixed;
+
+  if (containsTooWideChars (text, width))
+  {
+    text_fixed = text;
+    replaceTooWideChars (text_fixed, width, DEFAULT_SURROGATE_STR);
+    text_ptr = &text_fixed;
+  }
+
+  std::vector<std::string::size_type> ch_byte_indexes;
+  getUtf8CharacterByteIndexes (*text_ptr, ch_byte_indexes);
+
+  // Extract lines of wrapped text.
   std::string line;
-  unsigned int offset = 0;
-  while (extractLine (line, text, width, hyphenate, offset))
+  unsigned int ch_index = 0;
+  while (extractLine (line, *text_ptr, ch_byte_indexes, width, hyphenate, ch_index))
     lines.push_back (line);
 }
 
@@ -249,6 +464,39 @@ int longestLine (const std::string& input)
   return longest;
 }
 
+bool extractLine (
+  std::string& line,
+  const std::string& text,
+  int width,
+  bool hyphenate,
+  unsigned int& offset,
+  char surrogate)
+{
+  // Pre-process the input string.
+  const std::string* text_ptr = &text;
+  std::string text_fixed;
+
+  if (containsTooWideChars(text, width))
+  {
+    std::string surrogate_str(1, surrogate);
+    text_fixed = text;
+    replaceTooWideChars(text_fixed, width, surrogate_str);
+    text_ptr = &text_fixed;
+  }
+
+  std::vector<std::string::size_type> ch_byte_indexes;
+  getUtf8CharacterByteIndexes(*text_ptr, ch_byte_indexes);
+
+  auto find_res = std::find(ch_byte_indexes.begin(), ch_byte_indexes.end(), offset);
+  if (find_res == ch_byte_indexes.end())  // (offset) is not a valid character byte index.
+    return false;
+
+  unsigned int ch_index = find_res - ch_byte_indexes.begin();
+
+  // Extract a line of wrapped text.
+  return extractLine (line, *text_ptr, ch_byte_indexes, width, hyphenate, ch_index);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Walk the input text looking for a break point.  A break point is one of:
 //   - EOS
@@ -266,7 +514,7 @@ int longestLine (const std::string& input)
 // ws             ^   ^       ^^
 // punct
 // break                     ^
-bool extractLine (
+/*bool extractLine (
   std::string& line,
   const std::string& text,
   int width,
@@ -390,7 +638,8 @@ bool extractLine (
   }
 
   return true;
-}
+}*/
+
 /*
 
 TODO Resolve above against below, which is from Taskwarrior 2.6.0, and known to
