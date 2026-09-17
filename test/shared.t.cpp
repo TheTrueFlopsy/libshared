@@ -55,6 +55,86 @@ int main (int, char**)
   t.is (lines[5], "extrac-",       "wrapText line 5 -> 'extrac-'");
   t.is (lines[6], "tion.",         "wrapText line 6 -> 'tion.'");
 
+  text = "😍tag_test😍 测试 测试";  // wide characters
+  lines.clear ();
+  wrapText (lines, text, 4, false);
+  t.is (lines.size (), (size_t) 5, "wrapText '😍tag_test😍 测试 测试' -> 5 lines");
+  t.is (lines[0], "😍ta", "wrapText line 0 -> '😍ta'");
+  t.is (lines[1], "g_te", "wrapText line 1 -> 'g_te'");
+  t.is (lines[2], "st😍", "wrapText line 2 -> 'st😍'");
+  t.is (lines[3], "测试", "wrapText line 3 -> '测试'");
+  t.is (lines[4], "测试", "wrapText line 4 -> '测试'");
+
+  text = "😍tag_test😍 测试 测试";  // wide characters, single column
+  lines.clear ();
+  wrapText (lines, text, 1, false);
+  t.is (lines.size (), (size_t) 14, "wrapText '😍tag_test😍 测试 测试' -> 14 lines");
+  t.is (lines[0], ".", "wrapText line 0 -> '.'");
+  t.is (lines[1], "t", "wrapText line 1 -> 't'");
+  t.is (lines[2], "a", "wrapText line 2 -> 'a'");
+  t.is (lines[3], "g", "wrapText line 3 -> 'g'");
+  t.is (lines[4], "_", "wrapText line 4 -> '_'");
+  t.is (lines[5], "t", "wrapText line 5 -> 't'");
+  t.is (lines[6], "e", "wrapText line 6 -> 'e'");
+  t.is (lines[7], "s", "wrapText line 7 -> 's'");
+  t.is (lines[8], "t", "wrapText line 8 -> 't'");
+  t.is (lines[9], ".", "wrapText line 9 -> '.'");
+  t.is (lines[10], ".", "wrapText line 10 -> '.'");
+  t.is (lines[11], ".", "wrapText line 11 -> '.'");
+  t.is (lines[12], ".", "wrapText line 12 -> '.'");
+  t.is (lines[13], ".", "wrapText line 13 -> '.'");
+
+  text = "😍tag_test😍 测试 测试";  // wide characters, hyphenation
+  lines.clear ();
+  wrapText (lines, text, 11, true);
+  t.is (lines.size (), (size_t) 3, "wrapText '😍tag_test😍 测试 测试' -> 3 lines");
+  t.is (lines[0], "😍tag_test-", "wrapText line 0 -> '😍tag_test-'");
+  t.is (lines[1], "😍 测试 测-", "wrapText line 1 -> '😍 测试 测-'");
+  t.is (lines[2], "试", "wrapText line 2 -> '试'");
+
+  text = " 测试 测试";  // initial space, wide characters, two columns
+  lines.clear ();
+  wrapText (lines, text, 2, false);
+  t.is (lines.size (), (size_t) 4, "wrapText ' 测试 测试' -> 4 lines");
+  t.is (lines[0], "测", "wrapText line 0 -> '测'");
+  t.is (lines[1], "试", "wrapText line 1 -> '试'");
+  t.is (lines[2], "测", "wrapText line 2 -> '测'");
+  t.is (lines[3], "试", "wrapText line 3 -> '试'");
+
+  text = " 测试 测试";  // initial space, wide characters, two columns, hyphenation
+  lines.clear ();
+  wrapText (lines, text, 2, true);
+  t.is (lines.size (), (size_t) 4, "wrapText ' 测试 测试' -> 4 lines");
+  t.is (lines[0], "测", "wrapText line 0 -> '测'");
+  t.is (lines[1], "试", "wrapText line 1 -> '试'");
+  t.is (lines[2], "测", "wrapText line 2 -> '测'");
+  t.is (lines[3], "试", "wrapText line 3 -> '试'");
+
+  // combining diacritics (i.e. zero-width characters), two columns, hyphenation
+  text = "São.Sebastião";
+  lines.clear ();
+  wrapText (lines, text, 2, true);
+  t.is (lines.size (), (size_t) 12, "wrapText '' -> 12 lines");
+  t.is (lines[0], "S-", "wrapText line 0 -> 'S-'");
+  t.is (lines[1], "ã-", "wrapText line 1 -> 'ã-'");
+  t.is (lines[2], "o-", "wrapText line 2 -> ''");
+  t.is (lines[3], ".-", "wrapText line 3 -> ''");
+  t.is (lines[4], "S-", "wrapText line 4 -> ''");
+  t.is (lines[5], "e-", "wrapText line 5 -> ''");
+  t.is (lines[6], "b-", "wrapText line 6 -> ''");
+  t.is (lines[7], "a-", "wrapText line 7 -> ''");
+  t.is (lines[8], "s-", "wrapText line 8 -> ''");
+  t.is (lines[9], "t-", "wrapText line 9 -> ''");
+  t.is (lines[10], "i-", "wrapText line 10 -> ''");
+  t.is (lines[11], "ão", "wrapText line 11 -> 'ão'");
+
+  text = "durr        hurr";  // internal run of spaces
+  lines.clear ();
+  wrapText (lines, text, 6, false);
+  t.is (lines.size (), (size_t) 2, "wrapText 'durr        hurr' -> 2 lines");
+  t.is (lines[0], "durr", "wrapText line 0 -> 'durr'");
+  t.is (lines[1], "hurr", "wrapText line 1 -> 'hurr'");
+
   text = "one two three\n  four";
   lines.clear ();
   wrapText (lines, text, 13, true);

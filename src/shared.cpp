@@ -46,6 +46,7 @@
 #include <windows.h>
 #endif
 
+static const int MAX_CHAR_DISPLAY_WIDTH = 2;
 static const std::string DEFAULT_SURROGATE_STR = ".";
 
 // Replaces a Unicode character in UTF-8 encoding at byte index (i) in the byte string (input)
@@ -66,7 +67,7 @@ static unsigned int utf8ReplaceChar (
   return ch;
 }
 
-// Gets the byte indexes of all Unicode characters in the byte string (s), which is assumed
+// Gets the first-byte indexes of all Unicode characters in the byte string (s), which is assumed
 // to contain a valid UTF-8 string. Stores the byte indexes in the vector (out).
 static void getUtf8CharacterByteIndexes (const std::string& s, std::vector<std::string::size_type>& out)
 {
@@ -111,7 +112,6 @@ static void replaceTooWideChars (std::string& text, int width, const std::string
   while (byte_i < text.size ())
   {
     std::string::size_type old_byte_i = byte_i;
-
     int ch = utf8_next_char (text, byte_i);
 
     if (mk_wcwidth (ch) > width)
@@ -120,6 +120,20 @@ static void replaceTooWideChars (std::string& text, int width, const std::string
       utf8ReplaceChar (text, byte_i, surrogate);
     }
   }
+}
+
+// Fetches a Unicode character (i.e. code point) at position (ch_index) in the code point
+// sequence from the byte string (text), which is assumed to contain a valid UTF-8 string.
+// Also determines and outputs the display width of the fetched character. The vector
+// (ch_byte_indexes) is assumed to contain the first-byte indexes of all Unicode characters
+// in (text).
+static void getUtf8CharAt (
+  const std::string& s, const std::vector<std::string::size_type>& ch_byte_indexes,
+  unsigned int ch_index, unsigned int& ch, int& ch_width)
+{
+  std::string::size_type ch_byte_index = ch_byte_indexes[ch_index];
+  ch = utf8_next_char (s, ch_byte_index);
+  ch_width = mk_wcwidth (ch);
 }
 
 static bool extractLine (
@@ -148,11 +162,12 @@ static bool extractLine (
 
   while (ch_i < text_len_utf8)
   {
-    std::string::size_type ch_byte_i = ch_byte_indexes[ch_i];  // byte index of current character
-    std::string::size_type next_ch_byte_i = ch_byte_i;
-    unsigned int prev_ch = ch;  // Unicode code point of previous character
-    ch = utf8_next_char (text, next_ch_byte_i);
+    // Step 0: Fetch the current Unicode character and determine its display width.
+    unsigned int prev_ch = ch;
+    int ch_width;
+    getUtf8CharAt (text, ch_byte_indexes, ch_i, ch, ch_width);
 
+    // Step 1: Inspect the current character and update cursor variables.
     if (ch == '\0' || ch == '\n')  // mandatory line break
     {
       // Strip any run of whitespace at end of line.
@@ -167,7 +182,7 @@ static bool extractLine (
       {
         line_start_ch_i++;
         ch_i++;
-        continue;
+        continue;  // Done with current character, continue with the next.
       }
       else if (prev_ch != ' ')  // Detect word endings.
       {
@@ -178,8 +193,7 @@ static bool extractLine (
     else  // not whitespace
       prev_ws_start_ch_i = text_len_utf8;  // no ongoing run of whitespace
 
-    int ch_width = mk_wcwidth (ch);  // display width of current character
-
+    // Step 2: Consider whether the current character fits on the current line.
     // NOTE: Characters that are wider than the maximum line width should have been fixed
     // in preprocessing. The fallback behavior is to pretend that the character fits on
     // a line by itself, even though it doesn't.
@@ -193,9 +207,10 @@ static bool extractLine (
 
       line_width += ch_width;
       ch_i++;
-      continue;
+      continue;  // Done with current character, continue with the next.
     }
 
+    // Step 3: Insert an appropriate line break, perhaps with hyphenation.
     if (prev_word_end_ch_i < text_len_utf8)  // Line full, break at previous word ending.
     {
       line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[prev_word_end_ch_i]);
@@ -206,11 +221,11 @@ static bool extractLine (
       // NOTE: There might be enough space left for a hyphen even if there's not enough
       // for the next character.
       unsigned int hyphen_ch_i = (line_width < width) ? ch_i : prev_pos_w_ch_i;
-      std::string::size_type hyphen_ch_byte_i = ch_byte_indexes[hyphen_ch_i];
-      unsigned int hyphen_ch = utf8_next_char(text, hyphen_ch_byte_i);
-      int hyphen_ch_width = mk_wcwidth(hyphen_ch);
+      unsigned int hyphen_ch;
+      int hyphen_ch_width;
+      getUtf8CharAt (text, ch_byte_indexes, hyphen_ch_i, hyphen_ch, hyphen_ch_width);
 
-      if (hyphen_ch_i > line_start_ch_i && (hyphen_ch_i == ch_i || line_width - hyphen_ch_width > 0))
+      if (hyphen_ch_i == ch_i || line_width - hyphen_ch_width > 0)
       {
         // Hyphenated line has positive width, go ahead and hyphenate.
         line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[hyphen_ch_i]);
@@ -257,7 +272,7 @@ void wrapText (
   const std::string* text_ptr = &text;
   std::string text_fixed;
 
-  if (containsTooWideChars (text, width))
+  if (width < MAX_CHAR_DISPLAY_WIDTH && containsTooWideChars (text, width))
   {
     text_fixed = text;
     replaceTooWideChars (text_fixed, width, DEFAULT_SURROGATE_STR);
@@ -476,22 +491,22 @@ bool extractLine (
   const std::string* text_ptr = &text;
   std::string text_fixed;
 
-  if (containsTooWideChars(text, width))
+  if (width < MAX_CHAR_DISPLAY_WIDTH && containsTooWideChars (text, width))
   {
-    std::string surrogate_str(1, surrogate);
+    std::string surrogate_str (1, surrogate);
     text_fixed = text;
-    replaceTooWideChars(text_fixed, width, surrogate_str);
+    replaceTooWideChars (text_fixed, width, surrogate_str);
     text_ptr = &text_fixed;
   }
 
   std::vector<std::string::size_type> ch_byte_indexes;
-  getUtf8CharacterByteIndexes(*text_ptr, ch_byte_indexes);
+  getUtf8CharacterByteIndexes (*text_ptr, ch_byte_indexes);
 
-  auto find_res = std::find(ch_byte_indexes.begin(), ch_byte_indexes.end(), offset);
-  if (find_res == ch_byte_indexes.end())  // (offset) is not a valid character byte index.
+  auto find_res = std::find (ch_byte_indexes.begin (), ch_byte_indexes.end (), offset);
+  if (find_res == ch_byte_indexes.end ())  // (offset) is not a valid character byte index.
     return false;
 
-  unsigned int ch_index = find_res - ch_byte_indexes.begin();
+  unsigned int ch_index = find_res - ch_byte_indexes.begin ();
 
   // Extract a line of wrapped text.
   return extractLine (line, *text_ptr, ch_byte_indexes, width, hyphenate, ch_index);
