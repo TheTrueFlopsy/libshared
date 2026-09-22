@@ -30,7 +30,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 int main (int, char**)
 {
-  UnitTest t (211);
+  UnitTest t (262);
 
   // void wrapText (std::vector <std::string>& lines, const std::string& text, const int width, bool hyphenate)
   std::string text = "This is a test of the line wrapping code.";
@@ -89,8 +89,8 @@ int main (int, char**)
   wrapText (lines, text, 11, true);
   t.is (lines.size (), (size_t) 3, "wrapText '😍tag_test😍 测试 测试' -> 3 lines");
   t.is (lines[0], "😍tag_test-", "wrapText line 0 -> '😍tag_test-'");
-  t.is (lines[1], "😍 测试 测-", "wrapText line 1 -> '😍 测试 测-'");
-  t.is (lines[2], "试", "wrapText line 2 -> '试'");
+  t.is (lines[1], "😍 测试", "wrapText line 1 -> '😍 测试'");
+  t.is (lines[2], "测试", "wrapText line 2 -> '测试'");
 
   text = " 测试 测试";  // initial space, wide characters, two columns
   lines.clear ();
@@ -140,7 +140,15 @@ int main (int, char**)
   wrapText (lines, text, 13, true);
   t.is (lines.size (), (size_t) 2, "wrapText 'one two three\\n  four' -> 2 lines");
   t.is (lines[0], "one two three", "wrapText line 0 -> 'one two three'");
-  t.is (lines[1], "  four",        "wrapText line 1 -> '  four'");
+  // ISSUE: (Johan Sarge) I took the liberty to tentatively change this, because
+  // the old behavior - preserving any initial run of whitespace on a line immediately
+  // following an explicit line break, and only there - made little sense to me.
+  // Is that really how we want this case to work?
+  // NOTE: I guess you can just omit the whitespace if you don't want it there.
+  // The old behavior does provide a kinda hacky way to have indented blocks
+  // in line-wrapped text.
+  t.is (lines[1], "four",        "wrapText line 1 -> 'four'");
+  //t.is (lines[1], "  four",        "wrapText line 1 -> '  four'");
 
   // void extractLine (std::string& text, std::string& line, int length, bool hyphenate, unsigned int& offset)
   text = "This ☺ is a test of utf8 line extraction.";

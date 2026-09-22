@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright 2016 - 2017, 2019 - 2021, 2023, Gothenburg Bit Factory.
+// Copyright 2016 - 2017, 2019 - 2021, 2023, 2026, Gothenburg Bit Factory.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -48,6 +48,8 @@
 
 static const int MAX_CHAR_DISPLAY_WIDTH = 2;
 static const std::string DEFAULT_SURROGATE_STR = ".";
+// CAUTION: HYPHENATION_CHAR must be a 7-bit ASCII character (encoded as itself in UTF-8).
+static const char HYPHENATION_CHAR = '-';
 
 // Replaces a Unicode character in UTF-8 encoding at byte index (i) in the byte string (input)
 // with the byte string (subst). Returns the byte index of the character following the substituted
@@ -229,7 +231,7 @@ static bool extractLine (
       {
         // Hyphenated line has positive width, go ahead and hyphenate.
         line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[hyphen_ch_i]);
-        line.push_back ('-');
+        line.push_back (HYPHENATION_CHAR);
         ch_index = hyphen_ch_i;  // Start next line at character that was dropped to fit the hyphen.
       }
       else  // Can't hyphenate here.
@@ -509,7 +511,9 @@ bool extractLine (
   unsigned int ch_index = find_res - ch_byte_indexes.begin ();
 
   // Extract a line of wrapped text.
-  return extractLine (line, *text_ptr, ch_byte_indexes, width, hyphenate, ch_index);
+  bool res = extractLine (line, *text_ptr, ch_byte_indexes, width, hyphenate, ch_index);
+  offset = (ch_index < ch_byte_indexes.size ()) ? ch_byte_indexes[ch_index] : text.size ();
+  return res;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
