@@ -180,20 +180,12 @@ static bool extractLine (
     }
     else if (ch == ' ')  // whitespace
     {
-      if (ch_i == line_start_ch_i)  // Ignore whitespace at start of line.
-      {
-        line_start_ch_i++;
-        ch_i++;
-        continue;  // Done with current character, continue with the next.
-      }
-      else if (prev_ch != ' ')  // Detect word endings.
-      {
+      if (ch_i > line_start_ch_i && prev_ch != ' ')  // Detect word endings.
         prev_word_end_ch_i = ch_i;  // word ending
-        prev_ws_start_ch_i = ch_i;  // start of (non-initial) run of whitespace
-      }
+
+      if (ch_i == line_start_ch_i || prev_ch != ' ')  // Detect runs of whitespace.
+        prev_ws_start_ch_i = ch_i;  // start of run of whitespace
     }
-    else  // not whitespace
-      prev_ws_start_ch_i = text_len_utf8;  // no ongoing run of whitespace
 
     // Step 2: Consider whether the current character fits on the current line.
     // NOTE: Characters that are wider than the maximum line width should have been fixed
@@ -207,6 +199,9 @@ static bool extractLine (
       if (ch_width > 0)
         prev_pos_w_ch_i = ch_i;  // positive-width character added to line
 
+      if (ch != ' ')  // non-whitespace character added to line
+        prev_ws_start_ch_i = text_len_utf8;  // run of whitespace ended here
+
       line_width += ch_width;
       ch_i++;
       continue;  // Done with current character, continue with the next.
@@ -216,7 +211,11 @@ static bool extractLine (
     if (prev_word_end_ch_i < text_len_utf8)  // Line full, break at previous word ending.
     {
       line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[prev_word_end_ch_i]);
-      ch_index = prev_word_end_ch_i;  // Start next line at previous word ending.
+      ch_index = prev_word_end_ch_i + 1U;  // Start next line after previous word ending.
+    }
+    else if (prev_ws_start_ch_i < text_len_utf8) {  // Line full but all whitespace, strip that out.
+      line = "";  // Output empty line.
+      ch_index = ch_i;  // Start next line at current character.
     }
     else if (hyphenate)  // Line full, no word ending available, hyphenation enabled.
     {
@@ -251,7 +250,7 @@ static bool extractLine (
 
   ch_index = text_len_utf8;  // Reached end of input string.
 
-  if (line_start_ch_i < text_len_utf8)  // Include the last line, which contains non-whitespace.
+  if (line_start_ch_i < text_len_utf8)  // Include the last line.
   {
     // Strip any run of whitespace at end of line.
     std::string::size_type line_end_byte_i =
@@ -260,7 +259,7 @@ static bool extractLine (
     return true;
   }
 
-  return false;  // Last line contained nothing but whitespace, return false.
+  return false;  // Last line empty, return false.
 }
 
 ///////////////////////////////////////////////////////////////////////////////
