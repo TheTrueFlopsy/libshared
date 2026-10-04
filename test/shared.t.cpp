@@ -30,7 +30,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 int main (int, char**)
 {
-  UnitTest t (262);
+  UnitTest t (270);
 
   // void wrapText (std::vector <std::string>& lines, const std::string& text, const int width, bool hyphenate)
   std::string text = "This is a test of the line wrapping code.";
@@ -95,20 +95,31 @@ int main (int, char**)
   text = " 测试 测试";  // initial space, wide characters, two columns
   lines.clear ();
   wrapText (lines, text, 2, false);
-  t.is (lines.size (), (size_t) 4, "wrapText ' 测试 测试' -> 4 lines");
-  t.is (lines[0], "测", "wrapText line 0 -> '测'");
-  t.is (lines[1], "试", "wrapText line 1 -> '试'");
-  t.is (lines[2], "测", "wrapText line 2 -> '测'");
-  t.is (lines[3], "试", "wrapText line 3 -> '试'");
+  t.is (lines.size (), (size_t) 5, "wrapText ' 测试 测试' -> 5 lines");
+  t.is (lines[0], "", "wrapText line 0 -> ''");
+  t.is (lines[1], "测", "wrapText line 1 -> '测'");
+  t.is (lines[2], "试", "wrapText line 2 -> '试'");
+  t.is (lines[3], "测", "wrapText line 3 -> '测'");
+  t.is (lines[4], "试", "wrapText line 4 -> '试'");
 
   text = " 测试 测试";  // initial space, wide characters, two columns, hyphenation
   lines.clear ();
   wrapText (lines, text, 2, true);
+  t.is (lines.size (), (size_t) 5, "wrapText ' 测试 测试' -> 5 lines");
+  t.is (lines[0], "", "wrapText line 0 -> ''");
+  t.is (lines[1], "测", "wrapText line 1 -> '测'");
+  t.is (lines[2], "试", "wrapText line 2 -> '试'");
+  t.is (lines[3], "测", "wrapText line 3 -> '测'");
+  t.is (lines[4], "试", "wrapText line 4 -> '试'");
+
+  text = " 测试 测试";  // initial space, wide characters, three columns, hyphenation
+  lines.clear ();
+  wrapText (lines, text, 3, true);
   t.is (lines.size (), (size_t) 4, "wrapText ' 测试 测试' -> 4 lines");
-  t.is (lines[0], "测", "wrapText line 0 -> '测'");
-  t.is (lines[1], "试", "wrapText line 1 -> '试'");
-  t.is (lines[2], "测", "wrapText line 2 -> '测'");
-  t.is (lines[3], "试", "wrapText line 3 -> '试'");
+  t.is (lines[0], " 测", "wrapText line 0 -> ' 测'");
+  t.is (lines[1], "试", "wrapText line 2 -> '试'");
+  t.is (lines[2], "测-", "wrapText line 3 -> '测-'");
+  t.is (lines[3], "试", "wrapText line 4 -> '试'");
 
   // combining diacritics (i.e. zero-width characters), two columns, hyphenation
   text = "São.Sebastião";
@@ -131,9 +142,10 @@ int main (int, char**)
   text = "durr        hurr";  // internal run of spaces
   lines.clear ();
   wrapText (lines, text, 6, false);
-  t.is (lines.size (), (size_t) 2, "wrapText 'durr        hurr' -> 2 lines");
+  t.is (lines.size (), (size_t) 3, "wrapText 'durr        hurr' -> 3 lines");
   t.is (lines[0], "durr", "wrapText line 0 -> 'durr'");
-  t.is (lines[1], "hurr", "wrapText line 1 -> 'hurr'");
+  t.is (lines[1], "", "wrapText line 1 -> ''");
+  t.is (lines[2], " hurr", "wrapText line 2 -> ' hurr'");
 
   text = "one two three\n  four";
   lines.clear ();

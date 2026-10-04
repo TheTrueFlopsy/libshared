@@ -48,8 +48,8 @@
 
 static const int MAX_CHAR_DISPLAY_WIDTH = 2;
 static const std::string DEFAULT_SURROGATE_STR = ".";
-// CAUTION: HYPHENATION_CHAR must be a 7-bit ASCII character (encoded as itself in UTF-8).
-static const char HYPHENATION_CHAR = '-';
+// NOTE: HYPHENATION_STR should be a UTF-8 string with total display width exactly 1.
+static const std::string HYPHENATION_STR = "-";
 
 // Replaces a Unicode character in UTF-8 encoding at byte index (i) in the byte string (input)
 // with the byte string (subst). Returns the byte index of the character following the substituted
@@ -155,9 +155,10 @@ static bool extractLine (
   unsigned int line_start_ch_i = ch_index;
   unsigned int prev_word_end_ch_i = text_len_utf8;  // CPI of most recently encountered word ending
   unsigned int prev_ws_start_ch_i = text_len_utf8;  // CPI of start of ongoing run of whitespace
-  // CPI of most recently encountered positive-width character (not including the current one),
+  // CPIs of the two positive-width characters most recently added to the output line,
   // relevant for hyphenation
   unsigned int prev_pos_w_ch_i = text_len_utf8;
+  unsigned int prev_prev_pos_w_ch_i = text_len_utf8;
   unsigned int ch_i = line_start_ch_i;  // CPI of current character
   unsigned int ch = 0;  // Unicode code point of current character
   int line_width = 0;  // accumulated display width of current line
@@ -197,7 +198,10 @@ static bool extractLine (
     if (line_width + ch_width <= width)  // Line not full, include current character in line.
     {
       if (ch_width > 0)
+      {
+        prev_prev_pos_w_ch_i = prev_pos_w_ch_i;
         prev_pos_w_ch_i = ch_i;  // positive-width character added to line
+      }
 
       if (ch != ' ')  // non-whitespace character added to line
         prev_ws_start_ch_i = text_len_utf8;  // run of whitespace ended here
@@ -221,22 +225,35 @@ static bool extractLine (
     {
       // NOTE: There might be enough space left for a hyphen even if there's not enough
       // for the next character.
+      bool hyphenation_failure = false;
       unsigned int hyphen_ch_i = (line_width < width) ? ch_i : prev_pos_w_ch_i;
       unsigned int hyphen_ch;
       int hyphen_ch_width;
       getUtf8CharAt (text, ch_byte_indexes, hyphen_ch_i, hyphen_ch, hyphen_ch_width);
 
-      if (hyphen_ch_i == ch_i || line_width - hyphen_ch_width > 0)
-      {
-        // Hyphenated line has positive width, go ahead and hyphenate.
-        line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[hyphen_ch_i]);
-        line.push_back (HYPHENATION_CHAR);
-        ch_index = hyphen_ch_i;  // Start next line at character that was dropped to fit the hyphen.
+      if (hyphen_ch_i == ch_i || line_width - hyphen_ch_width > 0) {
+        // ISSUE: Some cumbersome logic to detect initial whitespace followed by a single
+        // non-whitespace positive-width character.
+        if (hyphen_ch_i == prev_pos_w_ch_i)
+        {
+          getUtf8CharAt (text, ch_byte_indexes, prev_prev_pos_w_ch_i, hyphen_ch, hyphen_ch_width);
+          if (hyphen_ch == ' ')
+            hyphenation_failure = true;  // Do not hyphenate whitespace.
+        }
       }
-      else  // Can't hyphenate here.
+      else
+        hyphenation_failure = true;  // No room for hyphen.
+
+      if (hyphenation_failure)  // Could't hyphenate here.
       {
         line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[ch_i]);
         ch_index = ch_i;  // Start next line at current character.
+      }
+      else  // Hyphenated line has positive width (and is not all whitespace), go ahead and hyphenate.
+      {
+        line = rangeSubstr (text, ch_byte_indexes[line_start_ch_i], ch_byte_indexes[hyphen_ch_i]);
+        line += HYPHENATION_STR;
+        ch_index = hyphen_ch_i;  // Start next line at character that was dropped to fit the hyphen.
       }
     }
     else  // Line full, no word ending available, hyphenation disabled.
@@ -480,6 +497,12 @@ int longestLine (const std::string& input)
   return longest;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Walk the input text looking for a break point.  A break point is one of:
+//   - EOS
+//   - \n
+//   - last space (word break) before column 'width' on the line
+//   - first character that would make the line wider than 'width' columns
 bool extractLine (
   std::string& line,
   const std::string& text,
