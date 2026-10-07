@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright 2016 - 2017, 2019 - 2021, 2023, Gothenburg Bit Factory.
+// Copyright 2016 - 2017, 2019 - 2021, 2023, 2026, Gothenburg Bit Factory.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -152,15 +152,7 @@ int main (int, char**)
   wrapText (lines, text, 13, true);
   t.is (lines.size (), (size_t) 2, "wrapText 'one two three\\n  four' -> 2 lines");
   t.is (lines[0], "one two three", "wrapText line 0 -> 'one two three'");
-  // ISSUE: (Johan Sarge) I took the liberty to tentatively change this, because
-  // the old behavior - preserving any initial run of whitespace on a line immediately
-  // following an explicit line break, and only there - made little sense to me.
-  // Is that really how we want this case to work?
-  // NOTE: I guess you can just omit the whitespace if you don't want it there.
-  // The old behavior does provide a kinda hacky way to have indented blocks
-  // in line-wrapped text.
-  t.is (lines[1], "four",        "wrapText line 1 -> 'four'");
-  //t.is (lines[1], "  four",        "wrapText line 1 -> '  four'");
+  t.is (lines[1], "  four",        "wrapText line 1 -> '  four'");
 
   // void extractLine (std::string& text, std::string& line, int length, bool hyphenate, unsigned int& offset)
   text = "This ☺ is a test of utf8 line extraction.";
